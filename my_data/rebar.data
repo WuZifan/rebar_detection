@@ -1,0 +1,6 @@
+classes= 1
+train=/Users/roland/DL_DATA/GANG_JIN/train_0.9_dataset.txt
+valid=/Users/roland/DL_DATA/GANG_JIN/val_0.9_dataset.txt
+names=my_data/rebar.names
+backup=backup/
+eval=coco
