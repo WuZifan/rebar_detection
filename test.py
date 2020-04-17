@@ -68,7 +68,7 @@ if __name__ == "__main__":
     # parser.add_argument("--weights_path", type=str, default="weights/yolov3.weights", help="path to weights file")
     # parser.add_argument("--class_path", type=str, default="data/coco.names", help="path to class label file")
 
-    parser.add_argument("--weights_path", type=str, default="weights/yolov3_ckpt_99.pth", help="path to weights file")
+    parser.add_argument("--weights_path", type=str, default="weights/yolov3_ckpt_71_0.814577857935163.pth", help="path to weights file")
     parser.add_argument("--model_def", type=str, default="my_data/yolov3_rebar.cfg",
                         help="path to model definition file")
     parser.add_argument("--data_config", type=str, default="my_data/rebar.data", help="path to data config file")
@@ -127,4 +127,4 @@ if __name__ == "__main__":
     for i, c in enumerate(ap_class):
         print(f"+ Class '{c}' ({class_names[c]}) - AP: {AP[i]}")
 
-    print(f"mAP: {AP.mean()}")
+    print(opt.weights_path,f"mAP: {AP.mean()}")

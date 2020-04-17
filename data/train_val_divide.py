@@ -15,8 +15,8 @@ def train_val(img_path,rate):
 
     cut_point = int(len(img_list)*rate)
 
-    train_data = img_list[:cut_point]
-    val_data = img_list[cut_point:]
+    train_data = [os.path.abspath(a) for a in img_list[:cut_point]]
+    val_data = [os.path.abspath(a) for a in img_list[cut_point:]]
     with open('train_dataset.txt','w') as f:
         f.write('\n'.join(train_data))
 

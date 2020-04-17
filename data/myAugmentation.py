@@ -3,8 +3,16 @@ import os
 from PIL import Image
 import numpy as np
 import random
+import argparse
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--nums", type=int, default=500, help="how many fake image you want.")
+    opt = parser.parse_args()
+    print(opt)
+
+    import time
+    time.sleep(100)
 
     img_dir = './images'
     img_paths = [ os.path.join(img_dir,img) for img in os.listdir(img_dir)]
