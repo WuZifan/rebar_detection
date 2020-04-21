@@ -48,6 +48,8 @@ if __name__ == "__main__":
     parser.add_argument("--evaluation_interval", type=int, default=1, help="interval evaluations on validation set")
     parser.add_argument("--compute_map", default=False, help="if True computes mAP every tenth batch")
     parser.add_argument("--multiscale_training", default=True, help="allow for multi-scale training")
+    parser.add_argument("--finetune", default=True, help="finetune or not ")
+
     opt = parser.parse_args()
     print(opt)
 
@@ -81,24 +83,27 @@ if __name__ == "__main__":
             model.load_darknet_weights(opt.pretrained_weights)
 
 
-    pretrained_parameters = []
-    classifier_parameters = []
-    for name,layer in model.named_parameters():
-        print(name,layer.shape)
-        layer_num = name.split('.')[1]
-        if int(layer_num)<74:
-            pretrained_parameters.append(layer)
-        else:
-            classifier_parameters.append(layer)
+    if opt.finetune:
+        pretrained_parameters = []
+        classifier_parameters = []
+        for name,layer in model.named_parameters():
+            print(name,layer.shape)
+            layer_num = name.split('.')[1]
+            if int(layer_num)<74:
+                pretrained_parameters.append(layer)
+            else:
+                classifier_parameters.append(layer)
 
-    print(len(pretrained_parameters),len(classifier_parameters))
-    print(type(model.parameters()))
+        print(len(pretrained_parameters),len(classifier_parameters))
+        print(type(model.parameters()))
 
-    # optimizer = torch.optim.Adam(model.parameters())
-    optimizer = torch.optim.Adam([
-        {'params':pretrained_parameters,'lr':1e-4},
-        {'params':classifier_parameters,'lr':1e-3}
-    ])
+        # optimizer = torch.optim.Adam(model.parameters())
+        optimizer = torch.optim.Adam([
+            {'params':pretrained_parameters,'lr':1e-4},
+            {'params':classifier_parameters,'lr':1e-3}
+        ])
+    else:
+        optimizer = torch.optim.Adam(model.parameters())
 
     ##########################
     # time.sleep(1000)

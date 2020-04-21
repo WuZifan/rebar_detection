@@ -226,38 +226,85 @@ def bbox_iou(box1, box2, x1y1x2y2=True):
 
 def non_max_suppression(prediction, conf_thres=0.5, nms_thres=0.4):
     """
+    :param prediction: [batch,(13*13+26*26+52*52)*3,4+front_conf+class_conf]
+
     Removes detections with lower object confidence score than 'conf_thres' and performs
     Non-Maximum Suppression to further filter detections.
     Returns detections with shape:
         (x1, y1, x2, y2, object_conf, class_score, class_pred)
     """
 
+    '''
+        当有大量低置信度的预测结果进来，会怎样？
+        1、当置信度低，预测框分布比较散
+        2、这样每次基于IOU+label的过滤，就很难将数据过滤掉
+        3、这样就导致NMS要走好多轮（但是卡死也不应该啊）
+    '''
+
+    print('prediction: ',prediction.shape)
+
     # From (center x, center y, width, height) to (x1, y1, x2, y2)
     prediction[..., :4] = xywh2xyxy(prediction[..., :4])
     output = [None for _ in range(len(prediction))]
+
+
+    # 对batch里面的每一张图的结果
     for image_i, image_pred in enumerate(prediction):
+
+        # 判断前景置信度是否满足要求
         # Filter out confidence scores below threshold
         image_pred = image_pred[image_pred[:, 4] >= conf_thres]
         # If none are remaining => process next image
         if not image_pred.size(0):
             continue
+
+        # 分数*前景执行度*最大分类概率
         # Object confidence times class confidence
         score = image_pred[:, 4] * image_pred[:, 5:].max(1)[0]
+
+        # 根据分数进行排序（此时还没有进行分类）
         # Sort by it
         image_pred = image_pred[(-score).argsort()]
+
+        # 拿到每个框各自的分类概率，一式两份：confsh和preds
+        print('each for1: ', image_pred[:, 5:].shape)
         class_confs, class_preds = image_pred[:, 5:].max(1, keepdim=True)
+        print('each for2: ',class_confs.shape,class_preds.shape)
+
+
         detections = torch.cat((image_pred[:, :5], class_confs.float(), class_preds.float()), 1)
+        print('each for3: ',detections.shape)
         # Perform non-maximum suppression
         keep_boxes = []
+        print('each for4 ',detections[0,:4].unsqueeze(0).shape)
+        print('each for5 ',detections[:,:4].shape)
         while detections.size(0):
+            '''
+                如果先找label_match;然后在label_match里面的结果找IOU_Match;
+                那么由于IOU_match处理的结果不是全部数据，那么就比较难过滤了
+
+                所以最好是先全量IOU，然后再找label
+            '''
+            # 用第一张图片和后面每一张图片做IOU计算，并判断哪些位置满足IOU需求
+            # 这样的话自己一定会被干掉
             large_overlap = bbox_iou(detections[0, :4].unsqueeze(0), detections[:, :4]) > nms_thres
+
+            # 找到和自己label相同的框
             label_match = detections[0, -1] == detections[:, -1]
+
+            # 找到和自己IOU过大，并且label相同的元素
             # Indices of boxes with lower confidence scores, large IOUs and matching labels
             invalid = large_overlap & label_match
+
+            # 把所有去掉的框用加权的方式来获得当前框
             weights = detections[invalid, 4:5]
             # Merge overlapping bboxes by order of confidence
             detections[0, :4] = (weights * detections[invalid, :4]).sum(0) / weights.sum()
+
+            # 保存当前框
             keep_boxes += [detections[0]]
+
+            # 拿到剩下的框
             detections = detections[~invalid]
         if keep_boxes:
             output[image_i] = torch.stack(keep_boxes)

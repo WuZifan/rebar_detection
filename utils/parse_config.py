@@ -31,6 +31,13 @@ def parse_data_config(path):
         line = line.strip()
         if line == '' or line.startswith('#'):
             continue
+        print(line)
         key, value = line.split('=')
         options[key.strip()] = value.strip()
     return options
+
+if __name__ == '__main__':
+    model_defs = parse_model_config('../my_data/yolov3_rebar_asff.cfg')
+    for model_def in model_defs:
+        if model_def["type"] == 'save':
+            print(model_def)

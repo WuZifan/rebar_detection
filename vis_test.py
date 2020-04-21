@@ -1,7 +1,7 @@
 from deep_model.models import *
 import traceback
 import torch
-
+from utils.utils import non_max_suppression
 
 class MyNN(torch.nn.Module):
 
@@ -17,15 +17,22 @@ class MyNN(torch.nn.Module):
 
 
 if __name__ == '__main__':
-    model_def='my_data/yolov3_rebar.cfg'
+    model_def='my_data/yolov3_rebar_asff.cfg'
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
     model = Darknet(model_def).to(device)
-    x = Variable(torch.randn(1,3,416,416))
+    x = Variable(torch.randn(8,3,416,416))
+    res = model(x)
+    res2 = non_max_suppression(res)
+    print(res.shape)
+    print(len(res2))
 
-    torch.onnx.export(model, x, "yolov3.onnx", verbose=True, input_names='raw_image',
-                      output_names='x')
+    # print(model.asff_save['0'].shape,model.asff_save['1'].shape,model.asff_save['2'].shape)
+    #
+    # torch.onnx.export(model, x, "yolov3_asff.onnx", verbose=True, input_names='raw_image',output_names='x')
+
+    # print(model)
 
 
 
