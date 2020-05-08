@@ -26,6 +26,9 @@ import warnings
 from tqdm import tqdm
 
 warnings.filterwarnings('ignore')
+os.environ['CUDA_VISIBLE_DEVICES'] = '1,2'
+
+#os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
 
 
 if __name__ == "__main__":
@@ -41,7 +44,8 @@ if __name__ == "__main__":
 
     #parser.add_argument("--pretrained_weights",default = 'weights/v1_yolov3_ckpt_99.pth', type=str, help="if specified starts from checkpoint model")
     #parser.add_argument("--pretrained_weights",default='weights/darknet53.conv.74',type=str, help="if specified starts from checkpoint model")
-    parser.add_argument("--pretrained_weights",default='checkpoints/yolov3_ckpt_146_0.9405248761177063.pth',type=str, help="if specified starts from checkpoint model")
+    #parser.add_argument("--pretrained_weights",default='checkpoints/yolov3_ckpt_146_0.9405248761177063.pth',type=str, help="if specified starts from checkpoint model")
+    parser.add_argument("--pretrained_weights",default=None,type=str, help="if specified starts from checkpoint model")
 
     parser.add_argument("--n_cpu", type=int, default=8, help="number of cpu threads to use during batch generation")
     parser.add_argument("--img_size", type=int, default=416, help="size of each image dimension")
@@ -71,10 +75,19 @@ if __name__ == "__main__":
     #########################
     # 这部分需要注意，是finetune，是继续训练还是从头训练。
     # Initiate model
-    model = Darknet(opt.model_def).to(device)
-    model.apply(weights_init_normal)
 
-    
+    model = Darknet(opt.model_def)
+
+    if torch.cuda.device_count() > 1:
+        print("Let's use", torch.cuda.device_count(), "GPUs!")
+         # 就这一行
+        model = nn.DataParallel(model).cuda()
+        import time
+        time.sleep(10)
+
+
+
+    model.apply(weights_init_normal)
 
     # If specified we start from checkpoint
     if opt.pretrained_weights:
@@ -84,13 +97,7 @@ if __name__ == "__main__":
         else:
             model.load_darknet_weights(opt.pretrained_weights)
     
-    #device_ids = [0, 1, 2, 3]
-    #model = torch.nn.DataParallel(model, device_ids=device_ids) # 声明所有可用设备
-    #model = model.cuda(device=device_ids[0])  # 模型放在主设备
-    # PS的方式加载模型
-    model = nn.DataParallel(model)
-
-
+ 
     if opt.finetune:
         pretrained_parameters = []
         classifier_parameters = []
@@ -149,91 +156,14 @@ if __name__ == "__main__":
         start_time = time.time()
         for batch_i, (_, imgs, targets) in tqdm(enumerate(dataloader)):
             batches_done = len(dataloader) * epoch + batch_i
-
             imgs = Variable(imgs.to(device))
             targets = Variable(targets.to(device), requires_grad=False)
 
-            print(imgs.shape)
+            print('imgs,targets: ',imgs.is_cuda,targets.is_cuda)
 
             loss, outputs = model(imgs, targets)
             print(type(loss))
             print(type(outputs))
-            loss.mean().backward()
+            loss.backward()
 
-            if batches_done % opt.gradient_accumulations:
-                # Accumulates gradient before each step
-                optimizer.step()
-                optimizer.zero_grad()
-
-            # ----------------
-            #   Log progress
-            # ----------------
-
-            log_str = "\n---- [Epoch %d/%d, Batch %d/%d] ----\n" % (epoch, opt.epochs, batch_i, len(dataloader))
-
-            metric_table = [["Metrics", *[f"YOLO Layer {i}" for i in range(len(model.module.yolo_layers))]]]
-
-            # Log metrics at each YOLO layer
-            for i, metric in enumerate(metrics):
-                formats = {m: "%.6f" for m in metrics}
-                formats["grid_size"] = "%2d"
-                formats["cls_acc"] = "%.2f%%"
-                row_metrics = [formats[metric] % yolo.metrics.get(metric, 0) for yolo in model.module.yolo_layers]
-                metric_table += [[metric, *row_metrics]]
-
-                # Tensorboard logging
-                tensorboard_log = []
-                for j, yolo in enumerate(model.module.yolo_layers):
-                    for name, metric in yolo.metrics.items():
-                        if name != "grid_size":
-                            tensorboard_log += [(f"{name}_{j+1}", metric)]
-                tensorboard_log += [("loss", loss.mean().item())]
-                logger.list_of_scalars_summary(tensorboard_log, batches_done)
-
-            log_str += AsciiTable(metric_table).table
-            log_str += f"\nTotal loss {loss.mean().item()}"
-
-            # Determine approximate time left for epoch
-            epoch_batches_left = len(dataloader) - (batch_i + 1)
-            time_left = datetime.timedelta(seconds=epoch_batches_left * (time.time() - start_time) / (batch_i + 1))
-            log_str += f"\n---- ETA {time_left}"
-
-            my_logger.info(log_str)
-
-            model.module.seen += imgs.size(0)
-        
-        AP=None
-        if epoch % opt.evaluation_interval == 0:
-            
-            print("\n---- Evaluating Model ----")
-            # Evaluate the model on the validation set
-            precision, recall, AP, f1, ap_class = evaluate(
-                model,
-                path=valid_path,
-                iou_thres=0.5,
-                conf_thres=0.5,
-                nms_thres=0.5,
-                img_size=opt.img_size,
-                batch_size=4,
-            )
-            evaluation_metrics = [
-                ("val_precision", precision.mean()),
-                ("val_recall", recall.mean()),
-                ("val_mAP", AP.mean()),
-                ("val_f1", f1.mean()),
-            ]
-            logger.list_of_scalars_summary(evaluation_metrics, epoch)
-
-            # Print class APs and mAP
-            ap_table = [["Index", "Class name", "AP"]]
-            for i, c in enumerate(ap_class):
-                ap_table += [[c, class_names[c], "%.5f" % AP[i]]]
-            my_logger.info('{}'.format(AsciiTable(ap_table).table))
-            my_logger.info('---- mAP {}'.format(AP.mean()))
-            print(f"---- mAP {AP.mean()}")
-
-        if epoch % opt.checkpoint_interval == 0 :
-            if AP is not None:
-                torch.save(model.state_dict(), "checkpoints/yolov3_ckpt_{}_{}.pth".format(epoch,AP.mean()))
-            else:
-                torch.save(model.state_dict(), "checkpoints/yolov3_ckpt_{}_{}.pth".format(epoch,loss))
+           

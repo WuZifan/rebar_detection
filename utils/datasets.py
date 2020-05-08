@@ -141,9 +141,34 @@ class ListDataset(Dataset):
         paths, imgs, targets = list(zip(*batch))
         # Remove empty placeholder targets
         targets = [boxes for boxes in targets if boxes is not None]
-        # Add sample index to targets
+        
+        '''
+                    下面这里操作是为了保证，在一个batch中，
+                    每个图片上，包含的目标对象数量一致
+                    比如batch=8，每张图包含的数量为[1,2,3,4,5,6,7,8
+                    那么，需要通过pad，每张图包含的数量变成[8,8,8,8,8,8,8,8]
+        '''
+        # 找到这个batch中，目标数量最多的那一个图片
+        max_targets = max([targets[i].size(0) for i in range(len(targets))])
+
+        # 下面是每个图片的目标数量补充到和最大的那个图片一致
+        padded_targets = list()
         for i, boxes in enumerate(targets):
-            boxes[:, 0] = i
+            if boxes is not None:
+                boxes[:, 0] = i
+                absent = max_targets - boxes.size(0)
+                if absent > 0:
+                    boxes = torch.cat((boxes, torch.zeros((absent, 6))), 0)
+                padded_targets.append(boxes)
+        targets = [boxes for boxes in padded_targets]
+        #########################
+
+        
+        # Add sample index to targets
+        #for i, boxes in enumerate(targets):
+        #    boxes[:, 0] = i
+        
+        
         targets = torch.cat(targets, 0)
         # Selects new image size every tenth batch
         if self.multiscale and self.batch_count % 10 == 0:

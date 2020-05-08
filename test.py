@@ -35,21 +35,25 @@ def evaluate(model, path, iou_thres, conf_thres, nms_thres, img_size, batch_size
 
     labels = []
     sample_metrics = []  # List of tuples (TP, confs, pred)
+    print('evaluate for')
     for batch_i, (_, imgs, targets) in enumerate(tqdm.tqdm(dataloader, desc="Detecting objects")):
 
         # Extract labels
         labels += targets[:, 1].tolist()
         # Rescale target
+        print('convert coordinates')
         targets[:, 2:] = xywh2xyxy(targets[:, 2:])
         targets[:, 2:] *= img_size
 
         imgs = Variable(imgs.type(Tensor), requires_grad=False)
 
-        print(imgs.shape)
+        print('evaluate input ',imgs.shape)
 
         with torch.no_grad():
             outputs = model(imgs)
+            print('evaluate res: ',outputs.shape)
             outputs = non_max_suppression(outputs, conf_thres=conf_thres, nms_thres=nms_thres)
+            print('evaluate nms',len(outputs))
 
         sample_metrics += get_batch_statistics(outputs, targets, iou_threshold=iou_thres)
 
@@ -68,8 +72,8 @@ if __name__ == "__main__":
     # parser.add_argument("--weights_path", type=str, default="weights/yolov3.weights", help="path to weights file")
     # parser.add_argument("--class_path", type=str, default="data/coco.names", help="path to class label file")
 
-    parser.add_argument("--weights_path", type=str, default="weights/yolov3_ckpt_71_0.814577857935163.pth", help="path to weights file")
-    parser.add_argument("--model_def", type=str, default="my_data/yolov3_rebar.cfg",
+    parser.add_argument("--weights_path", type=str, default="checkpoints/yolov3_ckpt_152_0.8100792101718948.pth", help="path to weights file")
+    parser.add_argument("--model_def", type=str, default="my_data/yolov3_rebar_asff.cfg",
                         help="path to model definition file")
     parser.add_argument("--data_config", type=str, default="my_data/rebar.data", help="path to data config file")
 
@@ -127,4 +131,4 @@ if __name__ == "__main__":
     for i, c in enumerate(ap_class):
         print(f"+ Class '{c}' ({class_names[c]}) - AP: {AP[i]}")
 
-    print(opt.weights_path,f"mAP: {AP.mean()}")
+    print(f"mAP: {AP.mean()}")

@@ -5,7 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
 import numpy as np
-
+from deep_model.asff import ASFF
 from utils.parse_config import *
 from utils.utils import build_targets, to_cpu, non_max_suppression
 
@@ -22,7 +22,6 @@ def create_modules(module_defs):
     module_list = nn.ModuleList()
     for module_i, module_def in enumerate(module_defs):
         modules = nn.Sequential()
-
         if module_def["type"] == "convolutional":
             bn = int(module_def["batch_normalize"])
             filters = int(module_def["filters"])
@@ -54,10 +53,11 @@ def create_modules(module_defs):
             modules.add_module(f"maxpool_{module_i}", maxpool)
 
         elif module_def["type"] == "upsample":
-            # print('do unsample')
-
             upsample = Upsample(scale_factor=int(module_def["stride"]), mode="nearest")
             modules.add_module(f"upsample_{module_i}", upsample)
+
+        elif module_def["type"] == "save":
+            modules.add_module(f"save_{module_i}", EmptyLayer())
 
         elif module_def["type"] == "route":
             layers = [int(x) for x in module_def["layers"].split(",")]
@@ -174,6 +174,7 @@ class YOLOLayer(nn.Module):
 
         # Add offset and scale with anchors
         pred_boxes = FloatTensor(prediction[..., :4].shape)
+
         pred_boxes[..., 0] = x.data + self.grid_x
         pred_boxes[..., 1] = y.data + self.grid_y
         pred_boxes[..., 2] = torch.exp(w.data) * self.anchor_w
@@ -189,15 +190,18 @@ class YOLOLayer(nn.Module):
         )
 
         if targets is None:
+
             return output, 0
         else:
+
             iou_scores, class_mask, obj_mask, noobj_mask, tx, ty, tw, th, tcls, tconf = build_targets(
-                pred_boxes=pred_boxes,
-                pred_cls=pred_cls,
+                pred_boxes=pred_boxes.cuda(),
+                pred_cls=pred_cls.cuda(),
                 target=targets,
-                anchors=self.scaled_anchors,
+                anchors=self.scaled_anchors.cuda(),
                 ignore_thres=self.ignore_thres,
             )
+
 
             obj_mask = obj_mask.bool()  # convert int8 to bool
             noobj_mask = noobj_mask.bool()  # convert int8 to bool
@@ -251,39 +255,56 @@ class Darknet(nn.Module):
     def __init__(self, config_path, img_size=416):
         super(Darknet, self).__init__()
         self.module_defs = parse_model_config(config_path)
-        # for layer in self.module_defs:
-        #     print(layer)
-        #
-        # print('======')
+
         self.hyperparams, self.module_list = create_modules(self.module_defs)
 
-        # for module in self.module_list:
-        #     print('module:',module[0])
+
         self.yolo_layers = [layer[0] for layer in self.module_list if hasattr(layer[0], "metrics")]
 
-        # print(self.yolo_layers)
         self.img_size = img_size
         self.seen = 0
         self.header_info = np.array([0, 0, 0, self.seen, 0], dtype=np.int32)
+
+        self.asff_module_list = nn.ModuleList([ASFF(level=0),ASFF(level=1),ASFF(level=2)])
 
     def forward(self, x, targets=None):
         img_dim = x.shape[2]
         loss = 0
         layer_outputs, yolo_outputs = [], []
+        asff_inputs = []
         for i, (module_def, module) in enumerate(zip(self.module_defs, self.module_list)):
             if module_def["type"] in ["convolutional", "upsample", "maxpool"]:
+
                 x = module(x)
+
+            elif module_def["type"] == "save":
+
+                asff_inputs.append(x)
+
             elif module_def["type"] == "route":
+
                 x = torch.cat([layer_outputs[int(layer_i)] for layer_i in module_def["layers"].split(",")], 1)
+
             elif module_def["type"] == "shortcut":
+
                 layer_i = int(module_def["from"])
                 x = layer_outputs[-1] + layer_outputs[layer_i]
+
             elif module_def["type"] == "yolo":
+
+                yolo_level = module_def["level"]
+
+                x = self.asff_module_list[int(yolo_level)](asff_inputs[0],asff_inputs[1],asff_inputs[2])
+
                 x, layer_loss = module[0](x, targets, img_dim)
                 loss += layer_loss
                 yolo_outputs.append(x)
+
             layer_outputs.append(x)
-        yolo_outputs = to_cpu(torch.cat(yolo_outputs, 1))
+
+        #yolo_outputs = to_cpu(torch.cat(yolo_outputs, 1))
+
+        yolo_outputs = torch.cat(yolo_outputs, 1)
         return yolo_outputs if targets is None else (loss, yolo_outputs)
 
     def load_darknet_weights(self, weights_path):
