@@ -267,17 +267,18 @@ def non_max_suppression(prediction, conf_thres=0.5, nms_thres=0.4):
         image_pred = image_pred[(-score).argsort()]
 
         # 拿到每个框各自的分类概率，一式两份：confsh和preds
-        print('each for1: ', image_pred[:, 5:].shape)
+        # print('each for1: ', image_pred[:, 5:].shape)
         class_confs, class_preds = image_pred[:, 5:].max(1, keepdim=True)
-        print('each for2: ',class_confs.shape,class_preds.shape)
+        # print('each for2: ',class_confs.shape,class_preds.shape)
 
 
         detections = torch.cat((image_pred[:, :5], class_confs.float(), class_preds.float()), 1)
-        print('each for3: ',detections.shape)
+        # print('each for3: ',detections.shape)
         # Perform non-maximum suppression
         keep_boxes = []
-        print('each for4 ',detections[0,:4].unsqueeze(0).shape)
-        print('each for5 ',detections[:,:4].shape)
+        # print('each for4 ',detections[0,:4].unsqueeze(0).shape)
+        # print('each for5 ',detections[:,:4].shape)
+        start_time = time.time()
         while detections.size(0):
             '''
                 如果先找label_match;然后在label_match里面的结果找IOU_Match;
@@ -308,6 +309,8 @@ def non_max_suppression(prediction, conf_thres=0.5, nms_thres=0.4):
             detections = detections[~invalid]
         if keep_boxes:
             output[image_i] = torch.stack(keep_boxes)
+        end_time = time.time()
+        print('batch {} nms time is {}'.format(image_i,end_time-start_time))
 
     return output
 
@@ -340,8 +343,11 @@ def build_targets(pred_boxes, pred_cls, target, anchors, ignore_thres):
     # Get anchors with best iou
     ious = torch.stack([bbox_wh_iou(anchor, gwh) for anchor in anchors])
     best_ious, best_n = ious.max(0)
+
     # Separate target values
     b, target_labels = target[:, :2].long().t()
+
+
     gx, gy = gxy.t()
     gw, gh = gwh.t()
     gi, gj = gxy.long().t()

@@ -55,9 +55,9 @@ class ASFF(nn.Module):
                 x_level_2, 3, stride=2, padding=1)
             level_2_resized = self.stride_level_2(level_2_downsampled_inter)
 
-            print('l0 {}'.format(level_0_resized.shape))
-            print('l1 {}'.format(level_1_resized.shape))
-            print('l2 {}'.format(level_2_resized.shape))
+            # print('l0 {}'.format(level_0_resized.shape))
+            # print('l1 {}'.format(level_1_resized.shape))
+            # print('l2 {}'.format(level_2_resized.shape))
 
 
         elif self.level == 1:
@@ -79,22 +79,22 @@ class ASFF(nn.Module):
         level_0_weight_v = self.weight_level_0(level_0_resized)
         level_1_weight_v = self.weight_level_1(level_1_resized)
         level_2_weight_v = self.weight_level_2(level_2_resized)
-        print('l0 {}'.format(level_0_weight_v.shape))
-        print('l1 {}'.format(level_1_weight_v.shape))
-        print('l2 {}'.format(level_2_weight_v.shape))
+        # print('l0 {}'.format(level_0_weight_v.shape))
+        # print('l1 {}'.format(level_1_weight_v.shape))
+        # print('l2 {}'.format(level_2_weight_v.shape))
 
         levels_weight_v = torch.cat(
             (level_0_weight_v, level_1_weight_v, level_2_weight_v), 1)
 
-        print('l all {}'.format(levels_weight_v.shape))
+        # print('l all {}'.format(levels_weight_v.shape))
 
 
         # 计算加权比例？？
         levels_weight = self.weight_levels(levels_weight_v)
-        print('l weight {}'.format(levels_weight.shape))
+        # print('l weight {}'.format(levels_weight.shape))
 
         levels_weight = F.softmax(levels_weight, dim=1)
-        print('l softmax {}'.format(levels_weight.shape))
+        # print('l softmax {}'.format(levels_weight.shape))
 
 
         # 多通道加权
@@ -102,12 +102,12 @@ class ASFF(nn.Module):
             level_1_resized * levels_weight[:, 1:2, :, :] +\
             level_2_resized * levels_weight[:, 2:, :, :]
 
-        print('l weighted sum {}'.format(fused_out_reduced.shape))
+        # print('l weighted sum {}'.format(fused_out_reduced.shape))
 
 
         # 再过一次卷积，防止不连续
         out = self.expand(fused_out_reduced)
-        print('l out {}'.format(out.shape))
+        # print('l out {}'.format(out.shape))
 
 
         if self.vis:

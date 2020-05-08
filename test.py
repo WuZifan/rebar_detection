@@ -68,8 +68,8 @@ if __name__ == "__main__":
     # parser.add_argument("--weights_path", type=str, default="weights/yolov3.weights", help="path to weights file")
     # parser.add_argument("--class_path", type=str, default="data/coco.names", help="path to class label file")
 
-    parser.add_argument("--weights_path", type=str, default="weights/yolov3_ckpt_71_0.814577857935163.pth", help="path to weights file")
-    parser.add_argument("--model_def", type=str, default="my_data/yolov3_rebar.cfg",
+    parser.add_argument("--weights_path", type=str, default="weights/yolov3_ckpt_2_0.7826961524303405.pth", help="path to weights file")
+    parser.add_argument("--model_def", type=str, default="my_data/yolov3_rebar_asff.cfg",
                         help="path to model definition file")
     parser.add_argument("--data_config", type=str, default="my_data/rebar.data", help="path to data config file")
 

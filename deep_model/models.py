@@ -152,8 +152,6 @@ class YOLOLayer(nn.Module):
         num_samples = x.size(0)
         grid_size = x.size(2)
 
-        # print('x shape {}'.format(x.shape))
-        # print('x view shape {}'.format((num_samples, self.num_anchors, self.num_classes + 5, grid_size, grid_size)))
         prediction = (
             x.view(num_samples, self.num_anchors, self.num_classes + 5, grid_size, grid_size)
             .permute(0, 1, 3, 4, 2)
